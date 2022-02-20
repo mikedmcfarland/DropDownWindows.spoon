@@ -30,22 +30,34 @@ function DropDownWindows:start(config)
 
     self.windowFilter =
         hs.window.filter.default:subscribe(
-        hs.window.filter.windowFocused,
-        function(window, appName)
-            logger.d("window focused", appName, window:id())
-            hs.fnutils.each(
-                self.dropDownWindows,
-                function(w)
-                    if w.window:id() ~= window:id() and not w.window:isMinimized() then
-                        logger.d("hiding window", w.window:application(), w.window:id())
-                        self:hideWindow(w.window)
-                    end
+        {
+            [hs.window.filter.windowFocused] = function(window, appName)
+                logger.d("window focused", appName, window:id())
+                self:hideUnfocusedDropdowns(window)
+            end,
+            [hs.window.filter.windowDestroyed] = function(window, appName)
+                local appDropDown = self.dropDownWindows[appName]
+                if appDropDown ~= nil and appDropDown.window:id() == window:id() then
+                    logger.d("remove drop down entry", appName, window:id())
+                    self.dropDownWindows[appName] = nil
                 end
-            )
-        end
+            end
+        }
     )
 
     return self
+end
+
+function DropDownWindows:hideUnfocusedDropdowns(focusedWindow)
+    hs.fnutils.each(
+        self.dropDownWindows,
+        function(w)
+            if w.window:id() ~= focusedWindow:id() and not w.window:isMinimized() then
+                logger.d("hiding window", w.window:application(), w.window:id())
+                self:hideWindow(w.window)
+            end
+        end
+    )
 end
 
 function DropDownWindows:stop()
@@ -75,13 +87,12 @@ function DropDownWindows:toggleWindow()
 
     local existingWindow = self.dropDownWindows[appName]
     if existingWindow then
-        logger.d("toggling", appName, existingWindow.window:id(), "off")
-        hs.alert.show("drop down off")
+        logger.d("toggling", appName, existingWindow.window:id(), "disabled")
+        hs.alert.show("drop down disabled")
         self.dropDownWindows[appName] = nil
     else
-        logger.d("toggling", appName, window:id(), "on")
-
-        hs.alert.show("drop down on")
+        logger.d("toggling", appName, window:id(), "enabled")
+        hs.alert.show("drop down enabled")
         self.dropDownWindows[appName] = {window = window}
         self:showWindow(window)
     end
