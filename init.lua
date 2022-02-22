@@ -16,30 +16,36 @@ DropDownWindows.homepage = "https://github.com/mikedmcfarland/DropDownWindows.sp
 function DropDownWindows:init()
     logger.d("init")
     self.dropDownWindows = {}
+    self.windows = {}
     return self
 end
 
 function DropDownWindows:start(config)
     logger.d("start")
-    local appMappings = config.apps
-    local appSpec = {}
-    for key, _ in pairs(appMappings) do
-        appSpec[key] = hs.fnutils.partial(self.dropDownApp, self, key)
-    end
-    hs.spoons.bindHotkeysToSpec(appSpec, appMappings)
 
+    self:bindAppKeys(config.apps)
     self.windowFilter =
         hs.window.filter.default:subscribe(
         {
             [hs.window.filter.windowFocused] = function(window, appName)
-                logger.d("window focused", appName, window:id())
-                self:hideUnfocusedDropdowns(window)
+                self:addWindow(appName, window)
             end,
             [hs.window.filter.windowDestroyed] = function(window, appName)
-                local appDropDown = self.dropDownWindows[appName]
-                if appDropDown ~= nil and appDropDown.window:id() == window:id() then
+                self:removeWindow(appName, window)
+                local appDropDownWindow = self.dropDownWindows[appName]
+                if appDropDownWindow ~= nil and appDropDownWindow:id() == window:id() then
                     logger.d("remove drop down entry", appName, window:id())
                     self.dropDownWindows[appName] = nil
+                end
+            end,
+            [hs.window.filter.windowUnfocused] = function(window, appName)
+                local appDropDownWindow = self.dropDownWindows[appName]
+                if appDropDownWindow == nil then
+                    return
+                end
+                if appDropDownWindow:id() == window:id() then
+                    logger.d("window unfocused", appName, window:id())
+                    self:hideDropDownWindow(window)
                 end
             end
         }
@@ -48,13 +54,21 @@ function DropDownWindows:start(config)
     return self
 end
 
+function DropDownWindows:bindAppKeys(appMappings)
+    local appSpec = {}
+    for key, _ in pairs(appMappings) do
+        appSpec[key] = hs.fnutils.partial(self.chooseApp, self, key)
+    end
+    hs.spoons.bindHotkeysToSpec(appSpec, appMappings)
+end
+
 function DropDownWindows:hideUnfocusedDropdowns(focusedWindow)
     hs.fnutils.each(
         self.dropDownWindows,
         function(w)
-            if w.window:id() ~= focusedWindow:id() and not w.window:isMinimized() then
-                logger.d("hiding window", w.window:application(), w.window:id())
-                self:hideWindow(w.window)
+            if w:id() ~= focusedWindow:id() and not w:isMinimized() then
+                logger.d("hiding unfocused window", w:application(), w:id())
+                self:hideDropDownWindow(w)
             end
         end
     )
@@ -87,40 +101,59 @@ function DropDownWindows:toggleWindow()
 
     local existingWindow = self.dropDownWindows[appName]
     if existingWindow then
-        logger.d("toggling", appName, existingWindow.window:id(), "disabled")
+        logger.d("toggling", appName, existingWindow:id(), "disabled")
         hs.alert.show("drop down disabled")
         self.dropDownWindows[appName] = nil
     else
         logger.d("toggling", appName, window:id(), "enabled")
         hs.alert.show("drop down enabled")
-        self.dropDownWindows[appName] = {window = window}
-        self:showWindow(window)
+        self.dropDownWindows[appName] = window
+        self:showDropDownWindow(window)
     end
 end
 
-function DropDownWindows:dropDownApp(appName)
-    logger.d("dropDownApp", appName)
-    local windowEntry = self.dropDownWindows[appName]
-    if windowEntry == nil then
-        logger.i("no window toggled for app", appName)
-        return
-    end
+function DropDownWindows:chooseApp(appName)
+    local window = self.dropDownWindows[appName]
 
-    local window = windowEntry.window
-    local frontWindow = hs.window.frontmostWindow()
-
-    if frontWindow ~= nil and window:id() == frontWindow:id() then
-        self:hideWindow(window)
+    if self:hasDropDown(appName) then
+        self:showOrHideDropDown(appName)
     else
-        self:showWindow(window)
+        hs.application.launchOrFocus(appName)
     end
 end
 
-function DropDownWindows:hideWindow(win)
-    win:minimize()
+function DropDownWindows:hasDropDown(appName)
+    return self:dropDownWindowByApp(appName) ~= nil
 end
 
-function DropDownWindows:showWindow(win)
+function DropDownWindows:showOrHideDropDown(appName)
+    local frontWindow = hs.window.frontmostWindow()
+    local appDropDownWindow = self:dropDownWindowByApp(appName)
+
+    local appIsAlreadyShowing = appDropDownWindow ~= nil and frontWindow:id() == appDropDownWindow:id()
+
+    if appIsAlreadyShowing then
+        logger.d("hiding drop down", appDropDownWindow:application(), appDropDownWindow:id())
+        self:hideDropDownWindow(appDropDownWindow)
+    else
+        self:showDropDownWindow(appDropDownWindow)
+    end
+end
+
+function DropDownWindows:hideDropDownWindow(win)
+    local app = win:application()
+    local appWindows = self:windowsByApp(app:name())
+
+    logger.d("#appWindows", #appWindows)
+
+    if #appWindows > 1 then
+        win:minimize()
+    else
+        win:application():hide()
+    end
+end
+
+function DropDownWindows:showDropDownWindow(win)
     local space = spaces.activeSpace()
     local mainScreen = hs.screen.find(spaces.mainScreenUUID())
 
@@ -133,6 +166,39 @@ function DropDownWindows:showWindow(win)
     win:setFrame(winFrame, 0)
     win:spacesMoveTo(space)
     win:focus()
+end
+
+function DropDownWindows:windowsByApp(appName)
+    if self.windows[appName] == nil then
+        self.windows[appName] = {}
+    end
+    return self.windows[appName]
+end
+
+function DropDownWindows:dropDownWindowByApp(appName)
+    return self.dropDownWindows[appName]
+end
+
+function DropDownWindows:addWindow(appName, window)
+    local appWindows = self:windowsByApp(appName)
+
+    for _, w in ipairs(appWindows) do
+        if w == window then
+            return
+        end
+    end
+
+    table.insert(appWindows, window)
+end
+
+function DropDownWindows:removeWindow(appName, window)
+    local appWindows = self:windowsByApp(appName)
+    for i, a in ipairs(appWindows) do
+        if a == window then
+            table.remove(appWindows, i)
+            return
+        end
+    end
 end
 
 return DropDownWindows
