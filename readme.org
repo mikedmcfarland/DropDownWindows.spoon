@@ -1,1 +1,13 @@
 
+* tasks
+** TODO fix: make sure popups go to current space
+** TODO feature: have hide move them to far off space (rather then app hide or window minimize)
+
+* ideas
+** serialize settings
+persist configurations across reloads, (then everything could be configured)
+[[https://www.hammerspoon.org/docs/hs.settings.html][Hammerspoon docs: hs.settings]]
+
+** sepearate window state into module
+consider serpating window state completely, maybe using
+[[https://www.hammerspoon.org/docs/hs.watchable.html][Hammerspoon docs: hs.watchable]]
