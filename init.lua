@@ -260,7 +260,6 @@ function DropDownWindows:hideWindow(record)
 end
 
 function DropDownWindows:showWindow(record)
-    local spaceId = spaces.activeSpace()
     local mainScreen = hs.screen.find(spaces.mainScreenUUID())
     local scrFrame = mainScreen:fullFrame()
 
@@ -271,6 +270,7 @@ function DropDownWindows:showWindow(record)
 
     -- this doesn't actually work right now, maybe some day
     -- https://github.com/asmagill/hs._asm.undocumented.spaces/issues/26
+    -- local spaceId = spaces.activeSpace()
     -- spaces.moveWindowToSpace(win:id(), spaceId)
 
     win:focus()
