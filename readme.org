@@ -26,7 +26,10 @@
 :LOGBOOK:
 - State "DONE"       from "TODO"       [2022-03-02 Wed 17:49]
 :END:
-** TODO feature: make cycle not cycle through dropdowns
+** DONE feature: make cycle not cycle through dropdowns
+:LOGBOOK:
+- State "DONE"       from "TODO"       [2022-03-02 Wed 19:39]
+:END:
 ** TODO feature: have hide move them to far off space (rather then app hide or window minimize)
 not currently possible due to [[https://github.com/asmagill/hs._asm.undocumented.spaces/issues/26][#26 `spaces.moveWindowToSpace` stopped working]] issue
 

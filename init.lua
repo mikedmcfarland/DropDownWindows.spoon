@@ -36,7 +36,6 @@ function DropDownWindows:start(config)
 
     local actions = {
         [FOCUS] = function(record)
-            -- logger.i("FOCUS", record:id(), "isDropdown", record.isDropdown(), "isFocused", record.isFocused())
             if record.isDropdown() and not record.isFocused() then
                 self:hideWindow(record)
             end
@@ -88,6 +87,19 @@ function DropDownWindows:bindConfigurableWindowsKeys(configs)
     hs.spoons.bindHotkeysToSpec(spec, mappings)
 end
 
+function DropDownWindows:bindHotkeys(mapping)
+    logger.d("bindingHotkeys")
+
+    local spec = {
+        toggleWindow = hs.fnutils.partial(self.toggleWindow, self),
+        cycle = hs.fnutils.partial(self.cycle, self)
+    }
+
+    hs.spoons.bindHotkeysToSpec(spec, mapping)
+
+    return self
+end
+
 function DropDownWindows:assignConfigurableWindow(configIndex)
     local frontmost = self.windows.frontmost()
 
@@ -131,21 +143,36 @@ function DropDownWindows:selectConfigurableWindow(configIndex)
     end
 end
 
+function DropDownWindows:cycle()
+    local frontmost = self.windows.frontmost()
+    local appName = frontmost:app():name()
+
+    local choices = {}
+
+    for _, r in pairs(self.windows.appRecords(appName)) do
+        if not r:isDropdown() then
+            table.insert(choices, 1, r)
+        end
+    end
+
+    if #choices <= 1 then
+        logger.i("no windows to switch to")
+        return
+    end
+
+    local currentIndex = hs.fnutils.indexOf(choices, frontmost)
+
+    local nextIndex = currentIndex + 1
+    if nextIndex > #choices then
+        nextIndex = 1
+    end
+    local nextChoice = choices[nextIndex]
+    nextChoice.window():focus()
+end
+
 function DropDownWindows:stop()
     logger.d("stop")
     self.windowFilter.unsubscribeAll()
-    return self
-end
-
-function DropDownWindows:bindHotkeys(mapping)
-    logger.d("bindingHotkeys")
-
-    local spec = {
-        toggleWindow = hs.fnutils.partial(self.toggleWindow, self)
-    }
-
-    hs.spoons.bindHotkeysToSpec(spec, mapping)
-
     return self
 end
 
@@ -212,18 +239,23 @@ function DropDownWindows:hideWindow(record)
     local appRecords = self.windows.appRecords(appName)
     local window = record:window()
 
-    local visibleAppWindowCount = 0
-    for _, r in pairs(appRecords) do
-        -- if r.window():isVisible() then
-        --     logger.i("triggered visible")
-        -- end
-        visibleAppWindowCount = visibleAppWindowCount + 1
+    local appWindowCount = 0
+    for _, _ in pairs(appRecords) do
+        appWindowCount = appWindowCount + 1
     end
 
-    if visibleAppWindowCount > 1 then
+    if appWindowCount > 1 then
         window:minimize()
     else
         window:application():hide()
+    end
+
+    -- TODO: this doesn't work consistenly on hide windows
+    -- this is because when you minimize a window for an app, and there's another app window, it will become focused (sometimes).
+    -- the previous focus gets written as that app window on repeat
+    local previousFocus = self.windows.previousFocus()
+    if previousFocus and not previousFocus:equals(record) then
+        previousFocus.window():focus()
     end
 end
 
@@ -396,6 +428,11 @@ function Windows:new(windowFilter, onChange)
     end
     o.allRecords = allRecords
 
+    local previousFocus = nil
+    o.previousFocus = function()
+        return previousFocus
+    end
+
     local makeTheFocus = function(record)
         if record.isFocused() then
             return
@@ -407,6 +444,7 @@ function Windows:new(windowFilter, onChange)
 
         for _, r in pairs(allRecords()) do
             if r.isFocused() and not record:equals(r) then
+                previousFocus = r
                 r._setIsFocused(false)
             end
         end
