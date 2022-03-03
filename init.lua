@@ -41,11 +41,14 @@ function DropDownWindows:start(config)
             end
         end,
         [DROPDOWN] = function(record)
-            if record:isDropdown() and not record:isFocused() then
+            if record:isDropdown() then
                 self:showWindow(record)
             end
         end,
         [CONFIG] = function(record)
+            if record:isConfigured() then
+                self:showWindow(record)
+            end
         end
     }
 
@@ -87,7 +90,7 @@ end
 function DropDownWindows:assignConfigurableWindow(configIndex)
     local frontmost = self.windows.frontmost()
 
-    local alreadyConfiguredAtIndex =
+    local alreadyConfiguredRecord =
         hs.fnutils.find(
         self.windows.allRecords(),
         function(r)
@@ -97,17 +100,20 @@ function DropDownWindows:assignConfigurableWindow(configIndex)
 
     local config = {index = configIndex}
 
-    if not alreadyConfiguredAtIndex then
+    if not alreadyConfiguredRecord then
+        hs.alert.show("configured dropdown")
         frontmost.setConfig(config)
         return
     end
 
-    if alreadyConfiguredAtIndex.equals(frontmost) then
+    if alreadyConfiguredRecord:equals(frontmost) then
+        hs.alert.show("unset configured dropdown")
         frontmost.setConfig(nil)
         return
     end
 
-    alreadyConfiguredAtIndex:setConfig(nil)
+    hs.alert.show("switch configured dropdown")
+    alreadyConfiguredRecord:setConfig(nil)
     frontmost.setConfig(config)
 end
 
@@ -159,19 +165,18 @@ function DropDownWindows:toggleWindow()
     if not dropdown then
         hs.alert.show("app dropdown enabled")
         frontmost:enableDropdown()
-    end
-
-    if dropdown.equals(frontmost) then
+    elseif dropdown:equals(frontmost) then
         hs.alert.show("app dropdown disabled")
         frontmost:disableDropdown()
+    else
+        hs.alert.show("switching app dropdown window")
+        dropdown:disableDropdown()
+        frontmost:enableDropdown()
     end
-
-    hs.alert.show("switching app dropdown window")
-    dropdown:disableDropdown()
-    frontmost:enableDropdown()
 end
 
 function DropDownWindows:chooseWindow(record)
+    logger.i("chooseWindow", "isDropdown", record.isDropdown(), "isFrontmost", record:isFrontmost())
     if record.isDropdown() then
         if record:isFrontmost() then
             self:hideWindow(record)
@@ -180,25 +185,25 @@ function DropDownWindows:chooseWindow(record)
         end
         return
     else
-        self:focusWindow(record)
+        record.window():focus()
     end
 end
 
 function DropDownWindows:chooseApp(appName)
-    local appRecord =
-        hs.fnutils.reduce(
-        self.windows.appRecords(appName),
-        function(a, b)
-            if a.lastFocused() > b.lastFocused() then
-                return a
-            else
-                return b
-            end
+    local choice = nil
+    for _, r in pairs(self.windows.appRecords(appName)) do
+        local rFocusedMoreRecently = (not choice or choice.lastFocused() < r.lastFocused())
+        if r:isDropdown() and not r:isConfigured() then
+            choice = r
+        elseif not r:isConfigured() and rFocusedMoreRecently then
+            choice = r
         end
-    )
+    end
 
-    if appRecord then
-        self:chooseWindow(appRecord)
+    logger.i("appRecord", choice)
+
+    if choice then
+        self:chooseWindow(choice)
     else
         hs.application.launchOrFocus(appName)
     end
@@ -209,7 +214,14 @@ function DropDownWindows:hideWindow(record)
     local appRecords = self.windows.appRecords(appName)
     local window = record:window()
 
-    if #appRecords > 1 then
+    local visibleAppWindowCount = 0
+    for _, r in pairs(appRecords) do
+        if r.window():isVisible() then
+            visibleAppWindowCount = visibleAppWindowCount + 1
+        end
+    end
+
+    if visibleAppWindowCount > 1 then
         window:minimize()
     else
         window:application():hide()
@@ -217,16 +229,19 @@ function DropDownWindows:hideWindow(record)
 end
 
 function DropDownWindows:showWindow(record)
-    local space = spaces.activeSpace()
+    local spaceId = spaces.activeSpace()
     local mainScreen = hs.screen.find(spaces.mainScreenUUID())
-
     local scrFrame = mainScreen:fullFrame()
 
     local newFrame = hs.geometry.copy(scrFrame)
     newFrame:scale(0.8)
     local win = record:window()
     win:setFrame(newFrame, 0)
-    win:spacesMoveTo(space)
+
+    -- this doesn't actually work right now, maybe some day
+    -- https://github.com/asmagill/hs._asm.undocumented.spaces/issues/26
+    spaces.moveWindowToSpace(win:id(), spaceId)
+
     win:focus()
 end
 
@@ -242,7 +257,7 @@ function WindowRecord:new(window, signalChange)
 
     o.setConfig = function(newConfig)
         config = newConfig
-        signalChange("config")
+        signalChange(CONFIG)
     end
 
     o.window = function()
@@ -261,7 +276,7 @@ function WindowRecord:new(window, signalChange)
     local isDropdown = false
     o.enableDropdown = function()
         isDropdown = true
-        signalChange("dropdown")
+        signalChange(DROPDOWN)
     end
 
     o.disableDropdown = function()
@@ -282,7 +297,7 @@ function WindowRecord:new(window, signalChange)
         local hasChanged = lastFocused ~= value
         isFocused = value
         if hasChanged then
-            signalChange("focus")
+            signalChange(FOCUS)
         end
     end
 
@@ -293,7 +308,7 @@ function WindowRecord:isConfigured()
 end
 
 function WindowRecord:equals(other)
-    return self:window() == other:window()
+    return self.window():id() == other.window():id()
 end
 
 function WindowRecord:app()
@@ -370,7 +385,7 @@ function Windows:new(windowFilter, onChange)
 
     o.appRecords = appRecords
 
-    o.allRecords = function()
+    local allRecords = function()
         local results = {}
         for _, v in pairs(windowRecordsByApp) do
             for _, r in pairs(v) do
@@ -380,6 +395,7 @@ function Windows:new(windowFilter, onChange)
 
         return results
     end
+    o.allRecords = allRecords
 
     o.windowFilter =
         windowFilter:subscribe(
@@ -387,7 +403,13 @@ function Windows:new(windowFilter, onChange)
             [hs.window.filter.windowCreated] = function(window)
                 ensureRecord(window)
             end,
-            [hs.window.filter.windowFocused] = function(window)
+            [hs.window.filter.windowFocused] = function(window, appName)
+                for _, r in pairs(allRecords()) do
+                    if r.isFocused() then
+                        r._setIsFocused(false)
+                    end
+                end
+
                 local record = ensureRecord(window)
                 local now = hs.timer.absoluteTime()
                 record._setLastFocused(now)
@@ -395,11 +417,12 @@ function Windows:new(windowFilter, onChange)
             end,
             [hs.window.filter.windowDestroyed] = function(window, appName)
                 removeRecord(window, appName)
-            end,
-            [hs.window.filter.windowUnfocused] = function(window)
-                local record = ensureRecord(window)
-                record._setIsFocused(false)
             end
+             -- ,
+            -- [hs.window.filter.windowUnfocused] = function(window)
+            --     local record = ensureRecord(window)
+            --     record._setIsFocused(false)
+            -- end
         }
     )
 

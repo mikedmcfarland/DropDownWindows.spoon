@@ -1,7 +1,26 @@
-
 * tasks
-** TODO fix: make sure popups go to current space
+** DONE fix: make sure popups go to current space
+:LOGBOOK:
+- State "DONE"       from "TODO"       [2022-03-02 Wed 14:48]
+:END:
+- looks like the problem is a bug in spaces api [[https://github.com/asmagill/hs._asm.undocumented.spaces/issues/26][#26 `spaces.moveWindowToSpace` stopped working]]
+- probably the same darn thing that makes amethyst not be able to move things between spaces :(
+- going to reserve myself to one space, ill use minimze to throw windows aside
+** DONE fix: when dropdown is activated resize/position the window immediately
+:LOGBOOK:
+- State "DONE"       from "TODO"       [2022-03-02 Wed 15:25]
+:END:
+** DONE fix: app dropdowns do not hide when selected
+:LOGBOOK:
+- State "DONE"       from "TODO"       [2022-03-02 Wed 17:09]
+:END:
+** DONE fix: app dropdowns can't be deactivated
+:LOGBOOK:
+- State "DONE"       from "TODO"       [2022-03-02 Wed 17:09]
+:END:
+** TODO fix: sometimes non drop down windows get hidden
 ** TODO feature: have hide move them to far off space (rather then app hide or window minimize)
+not currently possible due to [[https://github.com/asmagill/hs._asm.undocumented.spaces/issues/26][#26 `spaces.moveWindowToSpace` stopped working]] issue
 
 * ideas
 ** serialize settings
