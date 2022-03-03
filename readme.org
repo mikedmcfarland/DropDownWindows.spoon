@@ -18,7 +18,15 @@
 :LOGBOOK:
 - State "DONE"       from "TODO"       [2022-03-02 Wed 17:09]
 :END:
-** TODO fix: sometimes non drop down windows get hidden
+** DONE fix: windows that get shown from minimize don't trigger focus event
+:LOGBOOK:
+- State "DONE"       from "TODO"       [2022-03-02 Wed 17:49]
+:END:
+** DONE fix: sometimes non drop down windows get hidden
+:LOGBOOK:
+- State "DONE"       from "TODO"       [2022-03-02 Wed 17:49]
+:END:
+** TODO feature: make cycle not cycle through dropdowns
 ** TODO feature: have hide move them to far off space (rather then app hide or window minimize)
 not currently possible due to [[https://github.com/asmagill/hs._asm.undocumented.spaces/issues/26][#26 `spaces.moveWindowToSpace` stopped working]] issue
 

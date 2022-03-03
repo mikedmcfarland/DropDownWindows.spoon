@@ -36,7 +36,8 @@ function DropDownWindows:start(config)
 
     local actions = {
         [FOCUS] = function(record)
-            if record:isDropdown() and not record:isFocused() then
+            -- logger.i("FOCUS", record:id(), "isDropdown", record.isDropdown(), "isFocused", record.isFocused())
+            if record.isDropdown() and not record.isFocused() then
                 self:hideWindow(record)
             end
         end,
@@ -176,7 +177,6 @@ function DropDownWindows:toggleWindow()
 end
 
 function DropDownWindows:chooseWindow(record)
-    logger.i("chooseWindow", "isDropdown", record.isDropdown(), "isFrontmost", record:isFrontmost())
     if record.isDropdown() then
         if record:isFrontmost() then
             self:hideWindow(record)
@@ -200,8 +200,6 @@ function DropDownWindows:chooseApp(appName)
         end
     end
 
-    logger.i("appRecord", choice)
-
     if choice then
         self:chooseWindow(choice)
     else
@@ -216,9 +214,10 @@ function DropDownWindows:hideWindow(record)
 
     local visibleAppWindowCount = 0
     for _, r in pairs(appRecords) do
-        if r.window():isVisible() then
-            visibleAppWindowCount = visibleAppWindowCount + 1
-        end
+        -- if r.window():isVisible() then
+        --     logger.i("triggered visible")
+        -- end
+        visibleAppWindowCount = visibleAppWindowCount + 1
     end
 
     if visibleAppWindowCount > 1 then
@@ -264,7 +263,7 @@ function WindowRecord:new(window, signalChange)
         return window
     end
 
-    local lastFocused = nil
+    local lastFocused = 0
     o._setLastFocused = function(value)
         lastFocused = value
     end
@@ -397,6 +396,22 @@ function Windows:new(windowFilter, onChange)
     end
     o.allRecords = allRecords
 
+    local makeTheFocus = function(record)
+        if record.isFocused() then
+            return
+        end
+
+        local now = hs.timer.absoluteTime()
+        record._setLastFocused(now)
+        record._setIsFocused(true)
+
+        for _, r in pairs(allRecords()) do
+            if r.isFocused() and not record:equals(r) then
+                r._setIsFocused(false)
+            end
+        end
+    end
+
     o.windowFilter =
         windowFilter:subscribe(
         {
@@ -404,25 +419,18 @@ function Windows:new(windowFilter, onChange)
                 ensureRecord(window)
             end,
             [hs.window.filter.windowFocused] = function(window, appName)
-                for _, r in pairs(allRecords()) do
-                    if r.isFocused() then
-                        r._setIsFocused(false)
-                    end
-                end
-
                 local record = ensureRecord(window)
-                local now = hs.timer.absoluteTime()
-                record._setLastFocused(now)
-                record._setIsFocused(true)
+                makeTheFocus(record)
             end,
             [hs.window.filter.windowDestroyed] = function(window, appName)
                 removeRecord(window, appName)
+            end,
+            -- sometimes windows don't trigger a focus after being focused after minimizing
+            -- this is the only event I could find that was triggered in those cases
+            [hs.window.filter.windowVisible] = function(window, appName)
+                local record = ensureRecord(window)
+                makeTheFocus(record)
             end
-             -- ,
-            -- [hs.window.filter.windowUnfocused] = function(window)
-            --     local record = ensureRecord(window)
-            --     record._setIsFocused(false)
-            -- end
         }
     )
 
