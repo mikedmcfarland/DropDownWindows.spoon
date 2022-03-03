@@ -1,29 +1,20 @@
-* overview
+* Overview
 
-This spoon provides hotkeys for accessing apps, making dropdown (quake style) windows out of your apps. And even a way to configure arbitrary windows as needed as quake style dropdowns.
+This spoon provides hotkeys for accessing apps, making dropdown (quake style) windows out of your apps. You can also configure arbitrary windows as needed as quake style dropdowns.
 
-** app focus or launch
-you can configure apps to be launched or focused on.
-** cycle app windows
-this is a replacement for =cmd `= that works across spaces/screens. It also skips drop down windows (since they have dedicated keys).
-** app drop downs
-you can toggle shortcuts for apps so they become drop down windows.
-** configurable drop downs
-you can have free shortcuts that you can assign windows to, and then have them selected after.
-
-* example configuration
+* Example Configuration
 #+begin_src lua
-
 hs.spoons.use(
     "DropDownWindows",
     {
         hotkeys = {
-            toggleWindow = {{"cmd", "shift"}, "a"},
-            cycle = {{"cmd"}, "`"}
+            toggleWindow = {{"cmd", "shift"}, "a"}, -- toggle the app shortcut for the current window such that it becomes a quake style drop down window
+            cycle = {{"cmd"}, "`"} -- replace ment for cmd `, works across spaces and skips your configured and app dropdowns (since they already have dedicated keys)
         },
         fn = function(spoon)
             spoon:start(
                 {
+                    -- launch or focus application
                     apps = {
                         ["Alacritty"] = {
                             {"cmd"},
@@ -38,6 +29,7 @@ hs.spoons.use(
                             "3"
                         }
                     },
+                    -- configure shortcuts that assign and select dropdown windows
                     configurableWindows = {
                         {
                             assign = {{"cmd", "shift"}, "0"},
@@ -64,7 +56,7 @@ hs.spoons.use(
 )
 #+end_src
 
-* tasks
+* Tasks
 ** DONE fix: make sure popups go to current space
 :LOGBOOK:
 - State "DONE"       from "TODO"       [2022-03-02 Wed 14:48]
@@ -100,7 +92,7 @@ hs.spoons.use(
 not currently possible due to [[https://github.com/asmagill/hs._asm.undocumented.spaces/issues/26][#26 `spaces.moveWindowToSpace` stopped working]] issue
 ill use minimze to throw windows aside
 
-* ideas
+* Ideas
 ** serialize settings
 persist configurations across reloads, (then everything could be configured)
 [[https://www.hammerspoon.org/docs/hs.settings.html][Hammerspoon docs: hs.settings]]
