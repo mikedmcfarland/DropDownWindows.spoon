@@ -271,7 +271,7 @@ function DropDownWindows:showWindow(record)
 
     -- this doesn't actually work right now, maybe some day
     -- https://github.com/asmagill/hs._asm.undocumented.spaces/issues/26
-    spaces.moveWindowToSpace(win:id(), spaceId)
+    -- spaces.moveWindowToSpace(win:id(), spaceId)
 
     win:focus()
 end
