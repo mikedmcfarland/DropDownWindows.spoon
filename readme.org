@@ -1,11 +1,77 @@
+* overview
+
+This spoon provides hotkeys for accessing apps, making dropdown (quake style) windows out of your apps. And even a way to configure arbitrary windows as needed as quake style dropdowns.
+
+** app focus or launch
+you can configure apps to be launched or focused on.
+** cycle app windows
+this is a replacement for =cmd `= that works across spaces/screens. It also skips drop down windows (since they have dedicated keys).
+** app drop downs
+you can toggle shortcuts for apps so they become drop down windows.
+** configurable drop downs
+you can have free shortcuts that you can assign windows to, and then have them selected after.
+
+* example configuration
+#+begin_src lua
+
+hs.spoons.use(
+    "DropDownWindows",
+    {
+        hotkeys = {
+            toggleWindow = {{"cmd", "shift"}, "a"},
+            cycle = {{"cmd"}, "`"}
+        },
+        fn = function(spoon)
+            spoon:start(
+                {
+                    apps = {
+                        ["Alacritty"] = {
+                            {"cmd"},
+                            "1"
+                        },
+                        ["Emacs"] = {
+                            {"cmd"},
+                            "2"
+                        },
+                        ["Google Chrome"] = {
+                            {"cmd"},
+                            "3"
+                        }
+                    },
+                    configurableWindows = {
+                        {
+                            assign = {{"cmd", "shift"}, "0"},
+                            select = {{"cmd"}, "0"}
+                        },
+                        {
+                            assign = {{"cmd", "shift"}, "9"},
+                            select = {{"cmd"}, "9"}
+                        },
+                        {
+                            assign = {{"cmd", "shift"}, "8"},
+                            select = {{"cmd"}, "8"}
+                        },
+                        {
+                            assign = {{"cmd", "shift"}, "7"},
+                            select = {{"cmd"}, "7"}
+                        }
+                    }
+                }
+            )
+        end,
+        loglevel = "error"
+    }
+)
+#+end_src
+
 * tasks
 ** DONE fix: make sure popups go to current space
 :LOGBOOK:
 - State "DONE"       from "TODO"       [2022-03-02 Wed 14:48]
 :END:
 - looks like the problem is a bug in spaces api [[https://github.com/asmagill/hs._asm.undocumented.spaces/issues/26][#26 `spaces.moveWindowToSpace` stopped working]]
-- probably the same darn thing that makes amethyst not be able to move things between spaces :(
-- going to reserve myself to one space, ill use minimze to throw windows aside
+- probably the same darn thing that makes amethyst not be able to move things between spaces
+- going to limit myself to one space per screen.
 ** DONE fix: when dropdown is activated resize/position the window immediately
 :LOGBOOK:
 - State "DONE"       from "TODO"       [2022-03-02 Wed 15:25]
@@ -32,6 +98,7 @@
 :END:
 ** TODO feature: have hide move them to far off space (rather then app hide or window minimize)
 not currently possible due to [[https://github.com/asmagill/hs._asm.undocumented.spaces/issues/26][#26 `spaces.moveWindowToSpace` stopped working]] issue
+ill use minimze to throw windows aside
 
 * ideas
 ** serialize settings
