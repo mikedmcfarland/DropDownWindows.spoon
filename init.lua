@@ -37,7 +37,7 @@ function DropDownWindows:start(config)
     local actions = {
         [FOCUS] = function(record)
             logger.i("focus change", record)
-            if record.isDropdown() and not record.isFocused() then
+            if record.isDropdown() and not self.windows.isFocused(record) then
                 self:hideWindow(record)
             end
         end,
@@ -318,24 +318,11 @@ function WindowRecord:new(window, signalChange)
 
     o.disableDropdown = function()
         isDropdown = false
-        signalChange()
+        signalChange(DROPDOWN)
     end
 
     o.isDropdown = function()
         return isDropdown or config.index ~= nil
-    end
-
-    local isFocused = false
-    o.isFocused = function()
-        return isFocused
-    end
-
-    o._setIsFocused = function(value)
-        local hasChanged = isFocused ~= value
-        isFocused = value
-        if hasChanged then
-            signalChange(FOCUS)
-        end
     end
 
     return o
@@ -367,7 +354,7 @@ function WindowRecord:__tostring()
         isConfigured = self:isConfigured(),
         app = self:app():name(),
         isDropdown = self.isDropdown(),
-        isFocused = self.isFocused(),
+        -- isFocused = self.isFocused(),
         title = self.window():title()
     }
 
@@ -391,13 +378,13 @@ function Windows:new(windowFilter, onChange)
                 return win:app() ~= nil
             end
         )
-        hs.fnutils.ieach(
-            windows,
-            function(r)
-                logger.i("entry", r)
-            end
-        )
-        return hs.fnutils.copy(windows)
+        -- hs.fnutils.ieach(
+        --     windows,
+        --     function(r)
+        --         logger.i("entry", r)
+        --     end
+        -- )
+        return windows
     end
     o.allRecords = allRecords
 
@@ -422,6 +409,16 @@ function Windows:new(windowFilter, onChange)
         table.insert(windows, 1, newRecord)
         return newRecord
     end
+
+    local focus = nil
+    local isFocused = function(record)
+        if focus == nil then
+            return false
+        else
+            return record:equals(focus)
+        end
+    end
+    o.isFocused = isFocused
 
     local ensureRecord = function(window)
         local existingRecord = recordByWindow(window)
@@ -463,17 +460,17 @@ function Windows:new(windowFilter, onChange)
 
     local makeTheFocus = function(record)
         -- logger.i("makeTheFocus", record:app():name())
-        if not record.isFocused() then
-            local now = hs.timer.absoluteTime()
-            record._setLastFocused(now)
-            record._setIsFocused(true)
-        end
+        local now = hs.timer.absoluteTime()
+        record._setLastFocused(now)
 
-        for _, r in ipairs(allRecords()) do
-            if r.isFocused() and not record:equals(r) then
-                previousFocus = r
-                r._setIsFocused(false)
-            end
+        if focus == nil then
+            previousFocus = focus
+            focus = record
+            onChange(FOCUS, focus)
+        elseif not focus:equals(record) then
+            previousFocus = focus
+            focus = record
+            onChange(FOCUS, focus)
         end
     end
 
@@ -509,13 +506,14 @@ function Windows:new(windowFilter, onChange)
                 local record = ensureRecord(frontmost)
                 -- local record = ensureRecord(window)
                 makeTheFocus(record)
-            end,
-            [hs.window.filter.windowUnfocused] = function(window)
-                -- logger.i("windowUnfocused", window:application():name(), window:id())
-                local record = ensureRecord(window)
-                record._setIsFocused(false)
-                -- logger.i("\n-----\n")
             end
+            -- ,
+            -- [hs.window.filter.windowUnfocused] = function(window)
+            --     -- logger.i("windowUnfocused", window:application():name(), window:id())
+            --     local record = ensureRecord(window)
+            --     record._setIsFocused(false)
+            --     -- logger.i("\n-----\n")
+            -- end
         }
     )
 
