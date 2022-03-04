@@ -37,7 +37,7 @@ function DropDownWindows:start(config)
     local actions = {
         [FOCUS] = function(record)
             logger.i("focus change", record)
-            if record.isDropdown() and not self.windows.isFocused(record) then
+            if record.isDropdown() and not self.windows:isFocused(record) then
                 self:hideWindow(record)
             end
         end,
@@ -106,11 +106,11 @@ function DropDownWindows:bindHotkeys(mapping)
 end
 
 function DropDownWindows:assignConfigurableWindow(configIndex)
-    local frontmost = self.windows.frontmost()
+    local frontmost = self.windows:frontmost()
 
     local alreadyConfiguredRecord =
         hs.fnutils.find(
-        self.windows.allRecords(),
+        self.windows:allRecords(),
         function(r)
             return r:config() and r:config().index == configIndex
         end
@@ -136,7 +136,7 @@ end
 function DropDownWindows:selectConfigurableWindow(configIndex)
     local selected =
         hs.fnutils.find(
-        self.windows.allRecords(),
+        self.windows:allRecords(),
         function(r)
             return r:config() and r:config().index == configIndex
         end
@@ -147,12 +147,12 @@ function DropDownWindows:selectConfigurableWindow(configIndex)
 end
 
 function DropDownWindows:cycle()
-    local frontmost = self.windows.frontmost()
+    local frontmost = self.windows:frontmost()
     local appName = frontmost:app():name()
 
     local choices = {}
 
-    for _, r in pairs(self.windows.appRecords(appName)) do
+    for _, r in pairs(self.windows:appRecords(appName)) do
         if not r:isDropdown() or r:equals(frontmost) then
             table.insert(choices, 1, r)
         end
@@ -187,7 +187,7 @@ function DropDownWindows:toggleWindow()
 
     local dropdown =
         hs.fnutils.find(
-        self.windows.appRecords(appName),
+        self.windows:appRecords(appName),
         function(r)
             return r:isDropdown()
         end
@@ -221,7 +221,7 @@ end
 
 function DropDownWindows:chooseApp(appName)
     local choice = nil
-    for _, r in pairs(self.windows.appRecords(appName)) do
+    for _, r in pairs(self.windows:appRecords(appName)) do
         local rFocusedMoreRecently = (not choice or choice.lastFocused() < r.lastFocused())
         if r:isDropdown() and not r:isConfigured() then
             choice = r
@@ -243,7 +243,7 @@ function DropDownWindows:hideWindow(record)
 
     local appWindowCount = 0
     local appPid = record:app():pid()
-    for _, r in ipairs(self.windows.allRecords()) do
+    for _, r in ipairs(self.windows:allRecords()) do
         if r:app():pid() == appPid then
             appWindowCount = appWindowCount + 1
         end
@@ -259,7 +259,7 @@ function DropDownWindows:hideWindow(record)
     -- this is because when you minimize a window for an app, and there's another app window, it will become focused (sometimes).
     -- the previous focus gets written as that app window on repeat
 
-    local previousFocus = self.windows.previousFocus()
+    local previousFocus = self.windows:previousFocus()
     if previousFocus and not previousFocus:equals(record) then
         previousFocus.window():focus()
     end
@@ -363,122 +363,18 @@ end
 
 function Windows:new(windowFilter, onChange)
     local o = {}
-    setmetatable(o, self)
     self.__index = self
+    setmetatable(o, self)
     o._onChange = onChange
-
-    local windows = {}
-
-    local allRecords = function()
-        windows =
-            hs.fnutils.ifilter(
-            windows,
-            function(win)
-                -- local windowExists = pcall( function() return v.app() end )
-                return win:app() ~= nil
-            end
-        )
-        -- hs.fnutils.ieach(
-        --     windows,
-        --     function(r)
-        --         logger.i("entry", r)
-        --     end
-        -- )
-        return windows
-    end
-    o.allRecords = allRecords
-
-    local recordByWindow = function(window)
-        return hs.fnutils.find(
-            allRecords(),
-            function(r)
-                return r:id() == window:id()
-            end
-        )
-    end
-
-    local createRecord = function(window)
-        local newRecord = nil
-        newRecord =
-            WindowRecord:new(
-            window,
-            function(type)
-                onChange(type, newRecord)
-            end
-        )
-        table.insert(windows, 1, newRecord)
-        return newRecord
-    end
-
-    local focus = nil
-    local isFocused = function(record)
-        if focus == nil then
-            return false
-        else
-            return record:equals(focus)
-        end
-    end
-    o.isFocused = isFocused
-
-    local ensureRecord = function(window)
-        local existingRecord = recordByWindow(window)
-        if existingRecord then
-            return existingRecord
-        else
-            return createRecord(window)
-        end
-    end
-
-    local removeRecord = function(window)
-        for i, r in ipairs(windows) do
-            if r:id() == window:id() then
-                table.remove(windows, i)
-            end
-        end
-    end
-
-    o.frontmost = function()
-        return ensureRecord(hs.window.frontmostWindow())
-    end
-
-    local appRecords = function(appName)
-        local records = {}
-        for _, r in ipairs(allRecords()) do
-            if r:app():name() == appName then
-                table.insert(records, 1, r)
-            end
-        end
-        return records
-    end
-
-    o.appRecords = appRecords
-
-    local previousFocus = nil
-    o.previousFocus = function()
-        return previousFocus
-    end
-
-    local makeTheFocus = function(record)
-        -- logger.i("makeTheFocus", record:app():name())
-        local now = hs.timer.absoluteTime()
-        record._setLastFocused(now)
-
-        if focus == nil then
-            previousFocus = focus
-            focus = record
-            onChange(FOCUS, focus)
-        elseif not focus:equals(record) then
-            previousFocus = focus
-            focus = record
-            onChange(FOCUS, focus)
-        end
-    end
+    o._windows = {}
+    o._focus = nil
+    o._previousFocus = nil
 
     o.windowFilter =
         windowFilter:subscribe(
         {
             [hs.window.filter.windowCreated] = function(window)
-                ensureRecord(window)
+                o:_ensureRecord(window)
             end,
             [hs.window.filter.windowFocused] = function(window)
                 --frontmost window is more accurate, sometimes this parameter is just wrong and is the same app but different window
@@ -488,12 +384,12 @@ function Windows:new(windowFilter, onChange)
                     logger.i("windowFocused", "frontmost differs from window")
                 end
 
-                local record = ensureRecord(frontmost)
+                local record = o:_ensureRecord(frontmost)
                 -- local record = ensureRecord(window)
-                makeTheFocus(record)
+                o:_makeTheFocus(record)
             end,
             [hs.window.filter.windowDestroyed] = function(window)
-                removeRecord(window)
+                o:_removeRecord(window)
             end,
             -- sometimes windows don't trigger a focus after being focused after minimizing
             -- this is the only event I could find that was triggered in those cases
@@ -503,9 +399,9 @@ function Windows:new(windowFilter, onChange)
                     logger.i("windowVisible", "frontmost differs from window")
                 end
 
-                local record = ensureRecord(frontmost)
+                local record = o:_ensureRecord(frontmost)
                 -- local record = ensureRecord(window)
-                makeTheFocus(record)
+                o:_makeTheFocus(record)
             end
             -- ,
             -- [hs.window.filter.windowUnfocused] = function(window)
@@ -518,6 +414,95 @@ function Windows:new(windowFilter, onChange)
     )
 
     return o
+end
+
+function Windows:recordByWindow(window)
+    return hs.fnutils.find(
+        self:allRecords(),
+        function(r)
+            return r:id() == window:id()
+        end
+    )
+end
+
+function Windows:_createRecord(window)
+    local newRecord = nil
+    newRecord =
+        WindowRecord:new(
+        window,
+        function(type)
+            self._onChange(type, newRecord)
+        end
+    )
+    table.insert(self._windows, 1, newRecord)
+    return newRecord
+end
+
+function Windows:isFocused(record)
+    if self._focus == nil then
+        return false
+    end
+
+    return record:equals(focus)
+end
+
+function Windows:_ensureRecord(window)
+    local existingRecord = self:recordByWindow(window)
+    if existingRecord then
+        return existingRecord
+    else
+        return self:_createRecord(window)
+    end
+end
+
+function Windows:_removeRecord(window)
+    for i, r in ipairs(self._windows) do
+        if r:id() == window:id() then
+            table.remove(self._windows, i)
+        end
+    end
+end
+
+function Windows:appRecords(appName)
+    local records = {}
+    for _, r in ipairs(self:allRecords()) do
+        if r:app():name() == appName then
+            table.insert(records, 1, r)
+        end
+    end
+    return records
+end
+function Windows:previousFocus()
+    return self._previousFocus
+end
+
+function Windows:frontmost()
+    return self:_ensureRecord(hs.window.frontmostWindow())
+end
+
+function Windows:_makeTheFocus(record)
+    -- logger.i("makeTheFocus", record:app():name())
+    local now = hs.timer.absoluteTime()
+    record._setLastFocused(now)
+
+    if self._focus == nil or self._focus:equals(record) then
+        self._previousFocus = self._focus
+        self._focus = record
+        self._onChange(FOCUS, self._focus)
+    end
+end
+
+function Windows:allRecords()
+    logger.i("self._windows", self._windows)
+    self._windows =
+        hs.fnutils.ifilter(
+        self._windows,
+        function(win)
+            -- local windowExists = pcall( function() return v.app() end )
+            return win:app() ~= nil
+        end
+    )
+    return self._windows
 end
 
 return DropDownWindows
