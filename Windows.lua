@@ -1,12 +1,39 @@
+--- @class Windows
+--- @field private _toggledDropdowns table<string,table>
+--- @field private _configuredDropdowns table<string,table>
+--- @field private _windowLastFocusedAt table<string,number>
+--- @field private _windows hs.window[]
+--- @field private _onChange fun(event:WindowsFocusEvent)
 local Windows = {}
 Windows.__index = Windows
 
-local WindowRecord = {}
-WindowRecord.__index = WindowRecord
+--- @class WindowsFocusEvent
+--- @field focus WindowRecord
+--- @field previousFocus WindowRecord|nil
+local WindowsFocusEvent = {}
+WindowsFocusEvent.__index = WindowsFocusEvent
+
+---@param focus WindowRecord
+---@param previousFocus WindowRecord|nil
+---@return WindowsFocusEvent
+function WindowsFocusEvent:new(focus, previousFocus)
+    local e = {}
+    self.__index = self
+    setmetatable(e, self)
+    e.focus = focus
+    e.previousFocus = previousFocus
+    return e
+end
 
 local logger = hs.logger.new("Windows", "error")
 Windows.logger = logger
 
+---@type WindowRecord
+local WindowRecord = dofile(hs.spoons.resourcePath("WindowRecord.lua"))
+
+---@param windowFilter hs.window.filter
+---@param onChange fun(event:WindowsFocusEvent)
+---@returns Windows
 function Windows:new(windowFilter, onChange)
     local o = {}
     self.__index = self
@@ -15,6 +42,17 @@ function Windows:new(windowFilter, onChange)
     o._windows = {}
     o._focus = nil
     o._previousFocus = nil
+    o._configuredDropdowns = {}
+    o._toggledDropdowns = {}
+    o._windowLastFocusedAt = {}
+
+    local updateFocus = function()
+        --using frontmost window because the window from the event is sometimes unexpected
+        local frontmost = hs.window.frontmostWindow()
+
+        local record = o:_ensureRecord(frontmost)
+        o:_makeTheFocus(record)
+    end
 
     o.windowFilter =
         windowFilter:subscribe(
@@ -22,93 +60,75 @@ function Windows:new(windowFilter, onChange)
             [hs.window.filter.windowCreated] = function(window)
                 o:_ensureRecord(window)
             end,
-            [hs.window.filter.windowFocused] = function(window)
-                --frontmost window is more accurate, sometimes this parameter is just wrong and is the same app but different window
-                local frontmost = hs.window.frontmostWindow()
-
-                if frontmost:id() ~= window:id() or frontmost:application():pid() ~= window:application():pid() then
-                    logger.i("windowFocused", "frontmost differs from window")
-                end
-
-                local record = o:_ensureRecord(frontmost)
-                -- local record = ensureRecord(window)
-                o:_makeTheFocus(record)
+            [hs.window.filter.windowFocused] = function(_)
+                updateFocus()
             end,
             [hs.window.filter.windowDestroyed] = function(window)
                 o:_removeRecord(window)
             end,
             -- sometimes windows don't trigger a focus after being focused after minimizing
             -- this is the only event I could find that was triggered in those cases
-            [hs.window.filter.windowVisible] = function(window)
-                local frontmost = hs.window.frontmostWindow()
-                if frontmost:id() ~= window:id() or frontmost:application():pid() ~= window:application():pid() then
-                    logger.i("windowVisible", "frontmost differs from window")
-                end
-
-                local record = o:_ensureRecord(frontmost)
-                -- local record = ensureRecord(window)
-                o:_makeTheFocus(record)
+            [hs.window.filter.windowVisible] = function(_)
+                updateFocus()
+            end,
+            [hs.window.filter.windowUnfocused] = function(_)
+                updateFocus()
             end
-            -- ,
-            -- [hs.window.filter.windowUnfocused] = function(window)
-            --     -- logger.i("windowUnfocused", window:application():name(), window:id())
-            --     local record = ensureRecord(window)
-            --     record._setIsFocused(false)
-            --     -- logger.i("\n-----\n")
-            -- end
         }
     )
 
     return o
 end
 
-function Windows:recordByWindow(window)
+---@param id number
+---@return WindowRecord | nil
+function Windows:recordById(id)
     return hs.fnutils.find(
         self:allRecords(),
         function(r)
-            return r:id() == window:id()
+            return r:id() == id
         end
     )
 end
 
+--@param window hs.window
+--@return WindowRecord
 function Windows:_createRecord(window)
-    local newRecord = nil
-    newRecord =
-        WindowRecord:new(
-        window,
-        function(type)
-            self._onChange(type, newRecord)
-        end
-    )
-    table.insert(self._windows, 1, newRecord)
-    return newRecord
-end
-
-function Windows:isFocused(record)
-    if self._focus == nil then
-        return false
-    end
-
-    return record:equals(focus)
+    local id = window:id()
+    local isFocused = self._focus:equals(window)
+    local isToggledDropdown = self._toggledDropdowns[id] or self._configuredDropdowns[id]
+    local config = self._configuredDropdowns[id]
+    local lastFocused = self._windowLastFocusedAt[id]
+    local record = WindowRecord:new(window, isFocused, isToggledDropdown, config, lastFocused)
+    return record
 end
 
 function Windows:_ensureRecord(window)
-    local existingRecord = self:recordByWindow(window)
+    local existingRecord = self:recordById(window)
     if existingRecord then
         return existingRecord
     else
-        return self:_createRecord(window)
+        table.insert(self._windows, 1, window)
+        local record = self:_createRecord(window)
+        return record
     end
 end
 
 function Windows:_removeRecord(window)
+    local id = window:id()
     for i, r in ipairs(self._windows) do
-        if r:id() == window:id() then
+        if r:id() == id then
             table.remove(self._windows, i)
         end
     end
+
+    self._toggledDropdowns[id] = nil
+    self._configuredDropdowns[id] = nil
+    self._windowLastFocusedAt[id] = nil
 end
 
+---@param appName string
+---@return WindowRecord[]
 function Windows:appRecords(appName)
     local records = {}
     for _, r in ipairs(self:allRecords()) do
@@ -118,27 +138,31 @@ function Windows:appRecords(appName)
     end
     return records
 end
+
+---@return hs.window
 function Windows:previousFocus()
     return self._previousFocus
 end
 
+---@return WindowRecord
 function Windows:frontmost()
     return self:_ensureRecord(hs.window.frontmostWindow())
 end
 
 function Windows:_makeTheFocus(record)
-    -- logger.i("makeTheFocus", record:app():name())
     local now = hs.timer.absoluteTime()
-    record._setLastFocused(now)
+    self._windowLastFocusedAt[record:id()] = now
 
     if self._focus == nil or self._focus:equals(record) then
         self._previousFocus = self._focus
         self._focus = record
-        self._onChange(FOCUS, self._focus)
+
+        local event = WindowsFocusEvent.new(self._focus, self._previousFocus)
+        self._onChange(event)
     end
 end
 
-function Windows:allRecords()
+function Windows:_cleanupWindows()
     self._windows =
         hs.fnutils.ifilter(
         self._windows,
@@ -147,86 +171,33 @@ function Windows:allRecords()
             return win:app() ~= nil
         end
     )
-    return self._windows
 end
 
-function WindowRecord:new(window, signalChange)
-    local o = {}
-    setmetatable(o, self)
-    self.__index = self
-
-    local config = {index = nil}
-    o.config = function()
-        return config
+--@return WindowRecord[]
+function Windows:allRecords()
+    self:_cleanupWindows()
+    local records = {}
+    for index, win in ipairs(self._windows) do
+        local record = self:_createRecord(win)
+        table.insert(records, index, record)
     end
-
-    o.setConfig = function(index)
-        config.index = index
-        signalChange(CONFIG)
-    end
-
-    o.window = function()
-        return window
-    end
-
-    local lastFocused = 0
-    o._setLastFocused = function(value)
-        lastFocused = value
-    end
-
-    o.lastFocused = function()
-        return lastFocused
-    end
-
-    local isDropdown = false
-    o.enableDropdown = function()
-        isDropdown = true
-        signalChange(DROPDOWN)
-    end
-
-    o.disableDropdown = function()
-        isDropdown = false
-        signalChange(DROPDOWN)
-    end
-
-    o.isDropdown = function()
-        return isDropdown or config.index ~= nil
-    end
-
-    return o
-end
-function WindowRecord:isConfigured()
-    return self:config().index ~= nil
+    return records
 end
 
-function WindowRecord:equals(other)
-    -- return self.window():id() == other.window():id() and self:app():pid() == self:app():pid()
-    return self.window():id() == other.window():id()
+--@param windowId number
+--@param config table
+function Windows:setConfig(windowId, config)
+    self._configuredDropdowns[windowId] = config
 end
 
-function WindowRecord:app()
-    return self:window():application()
+--@param id number
+function Windows:enableDropdown(id)
+    self._toggledDropdowns[id] = {}
 end
 
-function WindowRecord:id()
-    return self:window():id()
-end
-
-function WindowRecord:isFrontmost()
-    return hs.window.frontmostWindow():id() == self:id()
-end
-
-function WindowRecord:__tostring()
-    local result = {
-        id = self:id(),
-        isConfigured = self:isConfigured(),
-        app = self:app():name(),
-        isDropdown = self.isDropdown(),
-        -- isFocused = self.isFocused(),
-        title = self.window():title()
-    }
-
-    return hs.json.encode(result, true)
+--@param id number
+function Windows:disableDropdown(id)
+    self._toggledDropdowns[id] = nil
 end
 
 return Windows

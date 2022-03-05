@@ -1,5 +1,7 @@
 -- https://github.com/asmagill/hs._asm.undocumented.spaces
 local spaces = require("hs._asm.undocumented.spaces")
+
+---@type Windows
 local Windows = dofile(hs.spoons.resourcePath("Windows.lua"))
 
 local DropDownWindows = {}
@@ -14,13 +16,17 @@ DropDownWindows.version = "0.1"
 DropDownWindows.author = "mikedmcfarland <mikedmcfarland@gmail.com>"
 DropDownWindows.homepage = "https://github.com/mikedmcfarland/DropDownWindows.spoon"
 
-local FOCUS = "focus"
-local DROPDOWN = "dropdown"
-local CONFIG = "config"
-
 function DropDownWindows:init()
     logger.d("init")
     return self
+end
+
+---@param event WindowsFocusEvent
+function DropDownWindows:focusHandler(event)
+    local previousFocus = event.previousFocus
+    if previousFocus:isDropdown() then
+        self:hideWindow(previousFocus)
+    end
 end
 
 function DropDownWindows:start(config)
@@ -31,40 +37,7 @@ function DropDownWindows:start(config)
     self:bindAppKeys(config.apps)
     self:bindConfigurableWindowsKeys(config.configurableWindows)
 
-    local actions = {
-        [FOCUS] = function(record)
-            logger.i("focus change", record)
-            if record.isDropdown() and not self.windows:isFocused(record) then
-                self:hideWindow(record)
-            end
-        end,
-        [DROPDOWN] = function(record)
-            if record:isDropdown() then
-                self:showWindow(record)
-            end
-        end,
-        [CONFIG] = function(record)
-            logger.i("config change", record)
-            if record:isConfigured() then
-                self:showWindow(record)
-            end
-        end
-    }
-
-    local actionI = 0
-    self.windows =
-        Windows:new(
-        hs.window.filter.default,
-        function(type, record)
-            local action = actions[type]
-            if action then
-                action(record)
-                actionI = actionI + 1
-                logger.i("-------------", actionI, "-------------")
-            end
-        end
-    )
-
+    self.windows = Windows:new(hs.window.filter.default, hs.fnutils.partial(self.focusHandler, self))
     return self
 end
 
@@ -109,25 +82,35 @@ function DropDownWindows:assignConfigurableWindow(configIndex)
         hs.fnutils.find(
         self.windows:allRecords(),
         function(r)
-            return r:config() and r:config().index == configIndex
+            return r.config and r.config.index == configIndex
         end
     )
 
     if not alreadyConfiguredRecord then
         hs.alert.show("configured dropdown")
-        frontmost.setConfig(configIndex)
+        self:makeConfiguredDropdown(frontmost, configIndex)
         return
     end
 
     if alreadyConfiguredRecord:equals(frontmost) then
         hs.alert.show("unset configured dropdown")
-        frontmost.setConfig(nil)
+        self:unsetConfiguredDropdown(frontmost)
         return
     end
 
     hs.alert.show("switch configured dropdown")
-    alreadyConfiguredRecord:setConfig(nil)
-    frontmost.setConfig(configIndex)
+    self:unsetConfiguredDropdown(alreadyConfiguredRecord)
+    self:makeConfiguredDropdown(frontmost, configIndex)
+end
+
+function DropDownWindows:unsetConfiguredDropdown(record)
+    self.windows.setConfig(record:id(), nil)
+end
+
+function DropDownWindows:makeConfiguredDropdown(windowId, index)
+    self.windows.setConfig(windowId, {configIndex = index})
+    local record = self.windows:recordById(windowId)
+    self:showWindow(record)
 end
 
 function DropDownWindows:selectConfigurableWindow(configIndex)
@@ -135,7 +118,7 @@ function DropDownWindows:selectConfigurableWindow(configIndex)
         hs.fnutils.find(
         self.windows:allRecords(),
         function(r)
-            return r:config() and r:config().index == configIndex
+            return r.config and r.config.index == configIndex
         end
     )
     if selected then
@@ -145,7 +128,7 @@ end
 
 function DropDownWindows:cycle()
     local frontmost = self.windows:frontmost()
-    local appName = frontmost:app():name()
+    local appName = frontmost:application():name()
 
     local choices = {}
 
@@ -192,15 +175,24 @@ function DropDownWindows:toggleWindow()
 
     if not dropdown then
         hs.alert.show("app dropdown enabled")
-        frontmost:enableDropdown()
+        self:enableDropdown(frontmost)
     elseif dropdown:equals(frontmost) then
         hs.alert.show("app dropdown disabled")
-        frontmost:disableDropdown()
+        self:disableDropdown(frontmost)
     else
         hs.alert.show("switching app dropdown window")
-        dropdown:disableDropdown()
-        frontmost:enableDropdown()
+        self:disableDropdown(dropdown)
+        self:enableDropdown(frontmost)
     end
+end
+
+function DropDownWindows:enableDropdown(record)
+    self.windows:enableDropdown(record:id())
+    self:showWindow(record)
+end
+
+function DropDownWindows:disableDropdown(record)
+    self.windows:disableDropdown(record:id())
 end
 
 function DropDownWindows:chooseWindow(record)
@@ -257,8 +249,8 @@ function DropDownWindows:hideWindow(record)
     -- the previous focus gets written as that app window on repeat
 
     local previousFocus = self.windows:previousFocus()
-    if previousFocus and not previousFocus:equals(record) then
-        previousFocus.window():focus()
+    if previousFocus and not record:equals(previousFocus) then
+        previousFocus:focus()
     end
 end
 
