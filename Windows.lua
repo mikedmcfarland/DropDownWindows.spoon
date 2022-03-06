@@ -39,20 +39,12 @@ function Windows:new(windowFilter, onChange)
     self.__index = self
     setmetatable(o, self)
     o._onChange = onChange
-    o._windows = {}
+    o._windows = hs.window.allWindows()
     o._focus = nil
     o._previousFocus = nil
     o._configuredDropdowns = {}
     o._toggledDropdowns = {}
     o._windowLastFocusedAt = {}
-
-    local updateFocus = function()
-        --using frontmost window because the window from the event is sometimes unexpected
-        local frontmost = hs.window.frontmostWindow()
-
-        local record = o:_ensureRecord(frontmost)
-        o:_makeTheFocus(record)
-    end
 
     o.windowFilter =
         windowFilter:subscribe(
@@ -61,7 +53,7 @@ function Windows:new(windowFilter, onChange)
                 o:_ensureRecord(window)
             end,
             [hs.window.filter.windowFocused] = function(_)
-                updateFocus()
+                o:_updateFocus()
             end,
             [hs.window.filter.windowDestroyed] = function(window)
                 o:_removeRecord(window)
@@ -69,19 +61,19 @@ function Windows:new(windowFilter, onChange)
             -- sometimes windows don't trigger a focus after being focused after minimizing
             -- this is the only event I could find that was triggered in those cases
             [hs.window.filter.windowVisible] = function(_)
-                updateFocus()
+                o:_updateFocus()
             end,
             [hs.window.filter.windowUnfocused] = function(_)
-                updateFocus()
+                o:_updateFocus()
             end,
             [hs.window.filter.windowMinimized] = function(_)
-                updateFocus()
+                o:_updateFocus()
             end,
             [hs.window.filter.windowHidden] = function(_)
-                updateFocus()
+                o:_updateFocus()
             end,
             [hs.window.filter.windowNotVisible] = function(_)
-                updateFocus()
+                o:_updateFocus()
             end
         }
     )
@@ -104,10 +96,10 @@ end
 --@return WindowRecord
 function Windows:_createRecord(window)
     local id = window:id()
-    local isFocused = self._focus and self._focus:equals(window)
+    local isFocused = self._focus and self._focus:id() == window:id()
     local toggle = self._toggledDropdowns[id]
     local config = self._configuredDropdowns[id]
-    local lastFocused = self._windowLastFocusedAt[id]
+    local lastFocused = self._windowLastFocusedAt[id] or 0
     local record = WindowRecord:new(window, isFocused, toggle, config, lastFocused)
     return record
 end
@@ -141,7 +133,8 @@ end
 function Windows:appRecords(appName)
     local records = {}
     for _, r in ipairs(self:allRecords()) do
-        if r:app():name() == appName then
+        local app = r:app()
+        if app and app:name() == appName then
             table.insert(records, 1, r)
         end
     end
@@ -158,46 +151,61 @@ function Windows:frontmost()
     return self:_ensureRecord(hs.window.frontmostWindow())
 end
 
+function Windows:_updateFocus()
+    --using focused window because the window from the event is sometimes unexpected
+    self:_makeTheFocus(hs.window.focusedWindow())
+
+    --sometimes in rare cases focused window isn't up to date.... I guess :/
+    hs.timer.doAfter(
+        0.4, --after some manual testing this seems to be the max delay
+        function()
+            self:_makeTheFocus(hs.window.focusedWindow())
+        end
+    )
+end
+
+---@param newFocus hs.window
 function Windows:_makeTheFocus(newFocus)
+    if newFocus == nil then
+        return
+    end
+
     local now = hs.timer.absoluteTime()
     self._windowLastFocusedAt[newFocus:id()] = now
 
     local previousFocus = self._focus
 
-    if newFocus:equals(previousFocus) then
+    if previousFocus and previousFocus:id() == newFocus:id() then
         return
     end
 
     self._previousFocus = previousFocus
     self._focus = newFocus
 
-    local event = WindowsFocusEvent:new(newFocus, previousFocus)
+    local newFocusRecord = self:_createRecord(newFocus)
+    local previousFocusRecord = previousFocus and self:_createRecord(previousFocus)
+    local event = WindowsFocusEvent:new(newFocusRecord, previousFocusRecord)
     self._onChange(event)
-end
-
-function Windows:_cleanupWindows()
-    -- sometimes windows never get removed and accessing their application causes errors
-    self._windows =
-        hs.fnutils.ifilter(
-        self._windows,
-        function(win)
-            return pcall(
-                function()
-                    return win:application()
-                end
-            )
-        end
-    )
 end
 
 --@return WindowRecord[]
 function Windows:allRecords()
-    self:_cleanupWindows()
     local records = {}
-    for index, win in ipairs(self._windows) do
+    local toRemove = {}
+
+    for _, win in ipairs(self._windows) do
         local record = self:_createRecord(win)
-        table.insert(records, index, record)
+        if record:app() then
+            table.insert(records, 1, record)
+        else
+            table.insert(toRemove, 1, record)
+        end
     end
+
+    for _, value in ipairs(toRemove) do
+        self:_removeRecord(value)
+    end
+
     return records
 end
 

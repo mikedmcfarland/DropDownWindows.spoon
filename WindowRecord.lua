@@ -57,9 +57,29 @@ function WindowRecord:equals(other)
     return self.window:id() == other:id()
 end
 
----@return hs.application
+---@return hs.application|nil
 function WindowRecord:app()
-    return self.window:application()
+    local _, application =
+        pcall(
+        function()
+            return self.window:application()
+        end
+    )
+    return application
+end
+
+---@param other WindowRecord
+---@return boolean
+function WindowRecord:samePid(other)
+    local _, result =
+        pcall(
+        function()
+            local selfPid = self.window:application():pid()
+            local otherPid = other.window:application():pid()
+            return selfPid == otherPid
+        end
+    )
+    return result
 end
 
 ---@return number

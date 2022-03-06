@@ -23,10 +23,10 @@ end
 
 ---@param event WindowsFocusEvent
 function DropDownWindows:focusHandler(event)
-    logger.i("focus handler", event.previousFocus, event.focus)
-    local previousFocus = event.previousFocus
-    if previousFocus and previousFocus:isDropdown() then
-        self:hideWindow(previousFocus)
+    local previous = event.previousFocus
+
+    if previous and previous:isDropdown() then
+        self:hideWindow(previous)
     end
 end
 
@@ -204,8 +204,12 @@ function DropDownWindows:enableDropdown(record)
     self:showWindow(record)
 end
 
+---@param record WindowRecord
 function DropDownWindows:disableDropdown(record)
     self.windows:disableDropdown(record:id())
+    if record:isConfigured() then
+        self.windows:setConfig(nil)
+    end
 end
 
 ---@param record WindowRecord
@@ -239,13 +243,22 @@ function DropDownWindows:chooseApp(appName)
 end
 
 function DropDownWindows:hideWindow(record)
+    if not record:app() then
+        logger.i("app is missing, cannot hide window")
+        return
+    end
     logger.i("hiding", record:app():name())
+
     local window = record.window
 
+    if not window:isVisible() then
+        logger.i("already not visible", record)
+        return
+    end
+
     local appWindowCount = 0
-    local appPid = record:app():pid()
     for _, r in ipairs(self.windows:allRecords()) do
-        if r:app():pid() == appPid then
+        if r:samePid(record) then
             appWindowCount = appWindowCount + 1
         end
     end

@@ -91,8 +91,14 @@ hs.spoons.use(
 ** TODO feature: have hide move them to far off space (rather then app hide or window minimize)
 not currently possible due to [[https://github.com/asmagill/hs._asm.undocumented.spaces/issues/26][#26 `spaces.moveWindowToSpace` stopped working]] issue
 ill use minimze to throw windows aside
-** TODO refactor: make separate modules for window/windowrecord
-** TODO bug: toggling app dropdown doesn't resize window
+** DONE refactor: make separate modules for window/windowrecord
+:LOGBOOK:
+- State "DONE"       from "TODO"       [2022-03-05 Sat 20:58]
+:END:
+** DONE bug: toggling app dropdown doesn't resize window
+:LOGBOOK:
+- State "DONE"       from "TODO"       [2022-03-05 Sat 20:59]
+:END:
 
 * Ideas
 ** serialize settings
