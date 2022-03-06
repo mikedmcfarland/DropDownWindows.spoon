@@ -47,9 +47,13 @@ function WindowRecord:isDropdown()
     return self:isConfigured() or self:isToggled()
 end
 
----@param other WindowRecord | hs.window
+---@param other WindowRecord | hs.window | nil
 ---@return boolean
 function WindowRecord:equals(other)
+    if other == nil then
+        return false
+    end
+
     return self.window:id() == other:id()
 end
 

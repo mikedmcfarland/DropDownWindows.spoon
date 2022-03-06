@@ -73,6 +73,15 @@ function Windows:new(windowFilter, onChange)
             end,
             [hs.window.filter.windowUnfocused] = function(_)
                 updateFocus()
+            end,
+            [hs.window.filter.windowMinimized] = function(_)
+                updateFocus()
+            end,
+            [hs.window.filter.windowHidden] = function(_)
+                updateFocus()
+            end,
+            [hs.window.filter.windowNotVisible] = function(_)
+                updateFocus()
             end
         }
     )
@@ -149,26 +158,34 @@ function Windows:frontmost()
     return self:_ensureRecord(hs.window.frontmostWindow())
 end
 
-function Windows:_makeTheFocus(record)
+function Windows:_makeTheFocus(newFocus)
     local now = hs.timer.absoluteTime()
-    self._windowLastFocusedAt[record:id()] = now
+    self._windowLastFocusedAt[newFocus:id()] = now
 
-    if self._focus == nil or self._focus:equals(record) then
-        self._previousFocus = self._focus
-        self._focus = record
+    local previousFocus = self._focus
 
-        local event = WindowsFocusEvent.new(self._focus, self._previousFocus)
-        self._onChange(event)
+    if newFocus:equals(previousFocus) then
+        return
     end
+
+    self._previousFocus = previousFocus
+    self._focus = newFocus
+
+    local event = WindowsFocusEvent:new(newFocus, previousFocus)
+    self._onChange(event)
 end
 
 function Windows:_cleanupWindows()
+    -- sometimes windows never get removed and accessing their application causes errors
     self._windows =
         hs.fnutils.ifilter(
         self._windows,
         function(win)
-            -- local windowExists = pcall( function() return v.app() end )
-            return win:application() ~= nil
+            return pcall(
+                function()
+                    return win:application()
+                end
+            )
         end
     )
 end

@@ -23,6 +23,7 @@ end
 
 ---@param event WindowsFocusEvent
 function DropDownWindows:focusHandler(event)
+    logger.i("focus handler", event.previousFocus, event.focus)
     local previousFocus = event.previousFocus
     if previousFocus and previousFocus:isDropdown() then
         self:hideWindow(previousFocus)
@@ -37,7 +38,13 @@ function DropDownWindows:start(config)
     self:bindAppKeys(config.apps)
     self:bindConfigurableWindowsKeys(config.configurableWindows)
 
-    self.windows = Windows:new(hs.window.filter.default, hs.fnutils.partial(self.focusHandler, self))
+    self.windows =
+        Windows:new(
+        hs.window.filter.default,
+        function(event)
+            self:focusHandler(event)
+        end
+    )
     return self
 end
 
@@ -113,21 +120,16 @@ function DropDownWindows:makeConfiguredDropdown(record, index)
 end
 
 function DropDownWindows:selectConfigurableWindow(configIndex)
-    logger.i("selectConfigurableWindow", configIndex)
     local allRecords = self.windows:allRecords()
 
-    logger.i("allRecords count", #allRecords)
     local selected =
         hs.fnutils.find(
         allRecords,
         function(r)
-            local isConfigured = r:configuredAtIndex(configIndex)
-            logger.i("r", r, isConfigured)
-            return isConfigured
+            return r:configuredAtIndex(configIndex)
         end
     )
 
-    logger.i("selected", selected)
     if selected then
         self:chooseWindow(selected)
     end
@@ -258,10 +260,10 @@ function DropDownWindows:hideWindow(record)
     -- this is because when you minimize a window for an app, and there's another app window, it will become focused (sometimes).
     -- the previous focus gets written as that app window on repeat
 
-    local previousFocus = self.windows:previousFocus()
-    if previousFocus ~= nil and not record:equals(previousFocus) then
-        previousFocus.window:focus()
-    end
+    -- local previousFocus = self.windows:previousFocus()
+    -- if previousFocus ~= nil and not record:equals(previousFocus) then
+    --     previousFocus.window:focus()
+    -- end
 end
 
 function DropDownWindows:showWindow(record)
