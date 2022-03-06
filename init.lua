@@ -24,7 +24,7 @@ end
 ---@param event WindowsFocusEvent
 function DropDownWindows:focusHandler(event)
     local previousFocus = event.previousFocus
-    if previousFocus:isDropdown() then
+    if previousFocus and previousFocus:isDropdown() then
         self:hideWindow(previousFocus)
     end
 end
@@ -104,36 +104,47 @@ function DropDownWindows:assignConfigurableWindow(configIndex)
 end
 
 function DropDownWindows:unsetConfiguredDropdown(record)
-    self.windows.setConfig(record:id(), nil)
+    self.windows:setConfig(record:id(), nil)
 end
 
-function DropDownWindows:makeConfiguredDropdown(windowId, index)
-    self.windows.setConfig(windowId, {configIndex = index})
-    local record = self.windows:recordById(windowId)
+function DropDownWindows:makeConfiguredDropdown(record, index)
+    self.windows:setConfig(record:id(), {index = index})
     self:showWindow(record)
 end
 
 function DropDownWindows:selectConfigurableWindow(configIndex)
+    logger.i("selectConfigurableWindow", configIndex)
+    local allRecords = self.windows:allRecords()
+
+    logger.i("allRecords count", #allRecords)
     local selected =
         hs.fnutils.find(
-        self.windows:allRecords(),
+        allRecords,
         function(r)
-            return r.config and r.config.index == configIndex
+            local isConfigured = r:configuredAtIndex(configIndex)
+            logger.i("r", r, isConfigured)
+            return isConfigured
         end
     )
+
+    logger.i("selected", selected)
     if selected then
         self:chooseWindow(selected)
     end
 end
 
 function DropDownWindows:cycle()
-    local frontmost = self.windows:frontmost()
-    local appName = frontmost:application():name()
+    local frontmostWindow = hs.window.frontmostWindow()
+    local appName = frontmostWindow:application():name()
 
     local choices = {}
 
+    local frontmost = nil
     for _, r in pairs(self.windows:appRecords(appName)) do
-        if not r:isDropdown() or r:equals(frontmost) then
+        if r:equals(frontmostWindow) then
+            frontmost = r
+            table.insert(choices, 1, r)
+        elseif not r:isDropdown() then
             table.insert(choices, 1, r)
         end
     end
@@ -150,7 +161,7 @@ function DropDownWindows:cycle()
         nextIndex = 1
     end
     local nextChoice = choices[nextIndex]
-    nextChoice.window():focus()
+    nextChoice.window:focus()
 end
 
 function DropDownWindows:stop()
@@ -195,8 +206,9 @@ function DropDownWindows:disableDropdown(record)
     self.windows:disableDropdown(record:id())
 end
 
+---@param record WindowRecord
 function DropDownWindows:chooseWindow(record)
-    if record.isDropdown() then
+    if record:isDropdown() then
         if record:isFrontmost() then
             self:hideWindow(record)
         else
@@ -204,17 +216,15 @@ function DropDownWindows:chooseWindow(record)
         end
         return
     else
-        record.window():focus()
+        record.window:focus()
     end
 end
 
 function DropDownWindows:chooseApp(appName)
     local choice = nil
     for _, r in pairs(self.windows:appRecords(appName)) do
-        local rFocusedMoreRecently = (not choice or choice.lastFocused() < r.lastFocused())
-        if r:isDropdown() and not r:isConfigured() then
-            choice = r
-        elseif not r:isConfigured() and rFocusedMoreRecently then
+        local rFocusedMoreRecently = (not choice or choice.lastFocused < r.lastFocused)
+        if not r:isConfigured() and (r:isDropdown() or rFocusedMoreRecently) then
             choice = r
         end
     end
@@ -228,7 +238,7 @@ end
 
 function DropDownWindows:hideWindow(record)
     logger.i("hiding", record:app():name())
-    local window = record:window()
+    local window = record.window
 
     local appWindowCount = 0
     local appPid = record:app():pid()
@@ -249,8 +259,8 @@ function DropDownWindows:hideWindow(record)
     -- the previous focus gets written as that app window on repeat
 
     local previousFocus = self.windows:previousFocus()
-    if previousFocus and not record:equals(previousFocus) then
-        previousFocus:focus()
+    if previousFocus ~= nil and not record:equals(previousFocus) then
+        previousFocus.window:focus()
     end
 end
 
@@ -260,7 +270,7 @@ function DropDownWindows:showWindow(record)
 
     local newFrame = hs.geometry.copy(scrFrame)
     newFrame:scale(0.8)
-    local win = record:window()
+    local win = record.window
     win:setFrame(newFrame, 0)
 
     -- this doesn't actually work right now, maybe some day

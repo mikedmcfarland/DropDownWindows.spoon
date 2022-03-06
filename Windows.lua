@@ -95,16 +95,16 @@ end
 --@return WindowRecord
 function Windows:_createRecord(window)
     local id = window:id()
-    local isFocused = self._focus:equals(window)
-    local isToggledDropdown = self._toggledDropdowns[id] or self._configuredDropdowns[id]
+    local isFocused = self._focus and self._focus:equals(window)
+    local toggle = self._toggledDropdowns[id]
     local config = self._configuredDropdowns[id]
     local lastFocused = self._windowLastFocusedAt[id]
-    local record = WindowRecord:new(window, isFocused, isToggledDropdown, config, lastFocused)
+    local record = WindowRecord:new(window, isFocused, toggle, config, lastFocused)
     return record
 end
 
 function Windows:_ensureRecord(window)
-    local existingRecord = self:recordById(window)
+    local existingRecord = self:recordById(window:id())
     if existingRecord then
         return existingRecord
     else
@@ -139,7 +139,7 @@ function Windows:appRecords(appName)
     return records
 end
 
----@return hs.window
+---@return WindowRecord | nil
 function Windows:previousFocus()
     return self._previousFocus
 end
@@ -168,7 +168,7 @@ function Windows:_cleanupWindows()
         self._windows,
         function(win)
             -- local windowExists = pcall( function() return v.app() end )
-            return win:app() ~= nil
+            return win:application() ~= nil
         end
     )
 end
