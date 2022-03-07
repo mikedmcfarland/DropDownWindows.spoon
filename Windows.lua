@@ -153,15 +153,16 @@ end
 
 function Windows:_updateFocus()
     --using focused window because the window from the event is sometimes unexpected
-    self:_makeTheFocus(hs.window.focusedWindow())
-
-    --sometimes in rare cases focused window isn't up to date.... I guess :/
-    hs.timer.doAfter(
-        0.4, --after some manual testing this seems to be the max delay
-        function()
-            self:_makeTheFocus(hs.window.focusedWindow())
-        end
-    )
+    local makeFrontmostFocus = function()
+        self:_makeTheFocus(hs.window.frontmostWindow())
+    end
+    makeFrontmostFocus()
+    --Hate this solution but sometimes in rare cases focused window isn't up to date...,
+    --and it becomes up to date unpredictably
+    local delays = {0.1, 0.3, 0.5, 1}
+    for _, delay in ipairs(delays) do
+        hs.timer.doAfter(delay, makeFrontmostFocus)
+    end
 end
 
 ---@param newFocus hs.window
@@ -170,14 +171,14 @@ function Windows:_makeTheFocus(newFocus)
         return
     end
 
-    local now = hs.timer.absoluteTime()
-    self._windowLastFocusedAt[newFocus:id()] = now
-
     local previousFocus = self._focus
 
     if previousFocus and previousFocus:id() == newFocus:id() then
         return
     end
+
+    local now = hs.timer.absoluteTime()
+    self._windowLastFocusedAt[newFocus:id()] = now
 
     self._previousFocus = previousFocus
     self._focus = newFocus
