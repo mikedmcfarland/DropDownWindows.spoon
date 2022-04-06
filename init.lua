@@ -280,8 +280,50 @@ function DropDownWindows:hideWindow(record)
 end
 
 function DropDownWindows:showWindow(record)
-    local mainScreen = hs.screen.find(spaces.mainScreenUUID())
-    local scrFrame = mainScreen:fullFrame()
+    logger.i("showWindow", record.window:application():name())
+    local activeSpaceID = spaces.activeSpace()
+    logger.i("activeSpaceID", activeSpaceID)
+
+    local activeScreenUUIDs = {}
+
+    for screenUUID, spacesOnDisplay in pairs(spaces.spacesByScreenUUID()) do
+        logger.i("screenUUID", screenUUID)
+        for _, spaceOnDisplay in pairs(spacesOnDisplay) do
+            logger.i("spaceOnDisplay", spaceOnDisplay)
+            if spaceOnDisplay == activeSpaceID then
+                table.insert(activeScreenUUIDs, #activeScreenUUIDs + 1, screenUUID)
+            end
+        end
+    end
+
+    hs.fnutils.each(
+        activeScreenUUIDs,
+        function(activeScreen)
+            logger.i("activeScreen", activeScreen)
+        end
+    )
+
+    local activeScreenUUID = activeScreenUUIDs[1]
+
+    -- local currentSpaces = spaces.query(spaces.masks.currentSpaces)
+    -- for _, value in ipairs(currentSpaces) do
+    --     logger.i("space", value)
+    -- end
+    -- local currentSpace = currentSpaces[1]
+    --
+
+    local activeScreen =
+        hs.fnutils.find(
+        hs.screen.allScreens(),
+        function(s)
+            return s:spacesUUID() == activeScreenUUID
+        end
+    )
+
+    logger.i("activeScreen", activeScreen)
+    logger.i("activeScreen:id()", activeScreen:id())
+
+    local scrFrame = activeScreen:fullFrame()
 
     local newFrame = hs.geometry.copy(scrFrame)
     newFrame:scale(0.8)
@@ -291,7 +333,7 @@ function DropDownWindows:showWindow(record)
     -- this doesn't actually work right now, maybe some day
     -- https://github.com/asmagill/hs._asm.undocumented.spaces/issues/26
     -- local spaceId = spaces.activeSpace()
-    -- spaces.moveWindowToSpace(win:id(), spaceId)
+    spaces.moveWindowToSpace(win:id(), activeSpaceID)
 
     win:focus()
 end

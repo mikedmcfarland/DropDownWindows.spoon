@@ -99,6 +99,7 @@ ill use minimze to throw windows aside
 :LOGBOOK:
 - State "DONE"       from "TODO"       [2022-03-05 Sat 20:59]
 :END:
+** TODO bug: app dropdowns sometimes don't appear on the currently focused space
 
 * Ideas
 ** serialize settings
