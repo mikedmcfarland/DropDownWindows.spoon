@@ -56,49 +56,6 @@ hs.spoons.use(
 )
 #+end_src
 
-* Tasks
-** DONE fix: make sure popups go to current space
-:LOGBOOK:
-- State "DONE"       from "TODO"       [2022-03-02 Wed 14:48]
-:END:
-- looks like the problem is a bug in spaces api [[https://github.com/asmagill/hs._asm.undocumented.spaces/issues/26][#26 `spaces.moveWindowToSpace` stopped working]]
-- probably the same darn thing that makes amethyst not be able to move things between spaces
-- going to limit myself to one space per screen.
-** DONE fix: when dropdown is activated resize/position the window immediately
-:LOGBOOK:
-- State "DONE"       from "TODO"       [2022-03-02 Wed 15:25]
-:END:
-** DONE fix: app dropdowns do not hide when selected
-:LOGBOOK:
-- State "DONE"       from "TODO"       [2022-03-02 Wed 17:09]
-:END:
-** DONE fix: app dropdowns can't be deactivated
-:LOGBOOK:
-- State "DONE"       from "TODO"       [2022-03-02 Wed 17:09]
-:END:
-** DONE fix: windows that get shown from minimize don't trigger focus event
-:LOGBOOK:
-- State "DONE"       from "TODO"       [2022-03-02 Wed 17:49]
-:END:
-** DONE fix: sometimes non drop down windows get hidden
-:LOGBOOK:
-- State "DONE"       from "TODO"       [2022-03-02 Wed 17:49]
-:END:
-** DONE feature: make cycle not cycle through dropdowns
-:LOGBOOK:
-- State "DONE"       from "TODO"       [2022-03-02 Wed 19:39]
-:END:
-** TODO feature: have hide move them to far off space (rather then app hide or window minimize)
-not currently possible due to [[https://github.com/asmagill/hs._asm.undocumented.spaces/issues/26][#26 `spaces.moveWindowToSpace` stopped working]] issue
-ill use minimze to throw windows aside
-** DONE refactor: make separate modules for window/windowrecord
-:LOGBOOK:
-- State "DONE"       from "TODO"       [2022-03-05 Sat 20:58]
-:END:
-** DONE bug: toggling app dropdown doesn't resize window
-:LOGBOOK:
-- State "DONE"       from "TODO"       [2022-03-05 Sat 20:59]
-:END:
 
 * Ideas
 ** serialize settings
