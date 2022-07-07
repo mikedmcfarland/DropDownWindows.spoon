@@ -94,18 +94,18 @@ function DropDownWindows:assignConfigurableWindow(configIndex)
     )
 
     if not alreadyConfiguredRecord then
-        hs.alert.show("configured dropdown")
+        hs.alert.show("configured window")
         self:makeConfiguredDropdown(frontmost, configIndex)
         return
     end
 
     if alreadyConfiguredRecord:equals(frontmost) then
-        hs.alert.show("unset configured dropdown")
+        hs.alert.show("unset configured window")
         self:unsetConfiguredDropdown(frontmost)
         return
     end
 
-    hs.alert.show("switch configured dropdown")
+    hs.alert.show("switch configured window")
     self:unsetConfiguredDropdown(alreadyConfiguredRecord)
     self:makeConfiguredDropdown(frontmost, configIndex)
 end
@@ -116,7 +116,6 @@ end
 
 function DropDownWindows:makeConfiguredDropdown(record, index)
     self.windows:setConfig(record:id(), {index = index})
-    self:showWindow(record)
 end
 
 function DropDownWindows:selectConfigurableWindow(configIndex)
@@ -225,6 +224,7 @@ function DropDownWindows:chooseWindow(record)
         record.window:focus()
     end
 end
+
 
 function DropDownWindows:chooseApp(appName)
     local choice = nil

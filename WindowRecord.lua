@@ -38,13 +38,8 @@ function WindowRecord:isConfigured()
 end
 
 ---@return boolean
-function WindowRecord:isToggled()
-    return self.toggle ~= nil
-end
-
----@return boolean
 function WindowRecord:isDropdown()
-    return self:isConfigured() or self:isToggled()
+    return self.toggle ~= nil --- self:isToggled()
 end
 
 ---@param other WindowRecord | hs.window | nil
